@@ -9,6 +9,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.aplicacion.Exception.CustomeFieldValidationException;
+import com.aplicacion.Exception.UsernameOrIdNotFound;
 import com.aplicacion.dto.ChangePasswordForm;
 import com.aplicacion.entity.User;
 import com.aplicacion.repository.UserRepository;
@@ -30,7 +32,7 @@ public class UserServiceImpl implements UserService {
 	private boolean checkUsernameAvaliable(User user)throws Exception {
 		Optional<User> userFound = repo.findByUsername(user.getUsername());
 		if(userFound.isPresent()){
-			throw new Exception("Username no disponible");
+			throw new CustomeFieldValidationException("Username no disponible", "username");
 		}
 		return true;
 	}
@@ -38,11 +40,11 @@ public class UserServiceImpl implements UserService {
 	
 	private boolean checkPasswordValid(User user)throws Exception {
 		if(user.getConfirmPassword() == null || user.getConfirmPassword().isEmpty()) {
-			throw new Exception("confirm Password es obligatorio");
+			throw new  CustomeFieldValidationException("Confirm password es obligatorio", "confirmPassword");
 		}
 		
 		if( !user.getPassword().equals(user.getConfirmPassword())) {
-			throw new Exception("Password y confirm password no coninciden ");
+			throw new  CustomeFieldValidationException("Password y confirm password no coinciden", "password");
 		}
 		return true;
 	}
@@ -50,15 +52,17 @@ public class UserServiceImpl implements UserService {
 	@Override
 	public User createUser(User user)throws Exception {
 		if(checkUsernameAvaliable(user) && checkPasswordValid(user)) {
+			String encodedPassword = bCryptPasswordEncoder.encode(user.getPassword());
+			user.setPassword(encodedPassword);
 			user = repo.save(user);
 		}
 		return user;
 	}
 
 	@Override
-	public User getUserById(Long id) throws Exception {
+	public User getUserById(Long id) throws UsernameOrIdNotFound  {
 		
-		return repo.findById(id).orElseThrow(() -> new Exception ("El usuario para editar no existe"));
+		return repo.findById(id).orElseThrow(() -> new UsernameOrIdNotFound ("El id del usuario  no existe"));
 	}
 
 	@Override
@@ -82,9 +86,10 @@ public class UserServiceImpl implements UserService {
 		to.setRoles(from.getRoles());
 	}
 
+	//validacion desde el backend
 	@Override
 	@PreAuthorize("hasAnyRole('ROLE_ADMIN')")
-	public void deleteUser(Long id) throws Exception {
+	public void deleteUser(Long id) throws  UsernameOrIdNotFound  {
 		User user = getUserById(id);
 		repo.delete(user);
 	}
@@ -114,17 +119,41 @@ public class UserServiceImpl implements UserService {
 		
 	}
 	
+	//UserDetails es un objeto de spring
 	private boolean isLoggedUserADMIN() {
+		//Obtener el usuario logeado
 		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		
 		UserDetails loggedUser = null;
+		Object roles = null;
+
+		//Verificar que ese objeto traido de sesion es el usuario
 		if (principal instanceof UserDetails) {
 			loggedUser = (UserDetails) principal;
 
-			loggedUser.getAuthorities().stream()
-					.filter(x -> "ADMIN".equals(x.getAuthority() ))      
-					.findFirst().orElse(null); //loggedUser = null;
+			roles = loggedUser.getAuthorities().stream()
+					.filter(x -> "ROLE_ADMIN".equals(x.getAuthority())).findFirst()
+					.orElse(null); 
 		}
-		return loggedUser != null ?true :false;
+		return roles != null ? true : false;
+	}
+	
+	//Obtener el usuario logeado desde la sesion y transformado en entidad para poder usarlo en tu aplicacion.
+	private User getLoggedUser() throws Exception {
+		//Obtener el usuario logeado
+		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		
+		UserDetails loggedUser = null;
+
+		//Verificar que ese objeto traido de sesion es el usuario
+		if (principal instanceof UserDetails) {
+			loggedUser = (UserDetails) principal;
+		}
+		
+		User myUser = repo
+				.findByUsername(loggedUser.getUsername()).orElseThrow(() -> new Exception(""));
+		
+		return myUser;
 	}
 
 	
