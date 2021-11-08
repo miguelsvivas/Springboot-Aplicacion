@@ -3,8 +3,8 @@
 								<thead class="thead-light">
 								<tr>
 									<th scope="col">#</th>
-									<th scope="col">First</th>
-									<th scope="col">Last</th>
+									<th scope="col">Nombre</th>
+									<th scope="col">Apellido</th>
 									<th scope="col">Username</th>
 									<th scope="col">E-mail</th>
 									<th></th>
@@ -19,8 +19,12 @@
 								<td th:text="${user.email}"></td>
 								<td>
 								
-					<a href="#" th:href="@{'/editUser/'+ ${user.id}}"><i class="fas fa-edit"></i></a>
+					<span th:if="${#authorization.expression('hasRole(''ROLE_ADMIN'')')} or (${#authorization.expression('hasRole(''ROLE_USER'')')} and ${#httpServletRequest.remoteUser==user.username})">
+						<a href="#" th:href="@{'/editUser/'+ ${user.id}}"><i class="fas fa-edit"></i></a>
+					</span>
+					<span th:if="${#authorization.expression('hasRole(''ROLE_ADMIN'')')}" >
 					| <a href="#" th:onclick="'javascript:confirmDelete(\''+ ${user.id} +'\');'"><i class="fas fa-user-times"></i></a>
+					</span>
 			</td>
 		</tr>
 								</tbody>

@@ -3,8 +3,13 @@ package com.aplicacion.service;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.aplicacion.dto.ChangePasswordForm;
 import com.aplicacion.entity.User;
 import com.aplicacion.repository.UserRepository;
 
@@ -13,6 +18,9 @@ public class UserServiceImpl implements UserService {
 
 	@Autowired
 	UserRepository repo;
+	
+	@Autowired
+	BCryptPasswordEncoder bCryptPasswordEncoder;
 	
 	@Override
 	public Iterable<User> getAllUsers() {
@@ -75,12 +83,48 @@ public class UserServiceImpl implements UserService {
 	}
 
 	@Override
+	@PreAuthorize("hasAnyRole('ROLE_ADMIN')")
 	public void deleteUser(Long id) throws Exception {
-		
 		User user = getUserById(id);
-		
 		repo.delete(user);
+	}
+
+	@Override
+	public User changePassword(ChangePasswordForm form) throws Exception {
+		User user = getUserById(form.getId());
 		
+		if ( !isLoggedUserADMIN() && !user.getPassword().equals(form.getCurrentPassword())) {
+			throw new Exception ("Current Password invalido");
+		}
+		
+		if( user.getPassword().equals(form.getNewPassword())) {
+			throw new Exception ("Nuevo debe ser diferente al password actual");
+			
+		}
+		
+		if (!form.getNewPassword().equals(form.getConfirmPassword())) {
+			throw new Exception ("Nuevo Password y current password no coinciden");
+		}
+		
+		String encodePassword = bCryptPasswordEncoder.encode(form.getNewPassword());
+		user.setPassword(encodePassword);
+		
+		
+		return repo.save(user);
+		
+	}
+	
+	private boolean isLoggedUserADMIN() {
+		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		UserDetails loggedUser = null;
+		if (principal instanceof UserDetails) {
+			loggedUser = (UserDetails) principal;
+
+			loggedUser.getAuthorities().stream()
+					.filter(x -> "ADMIN".equals(x.getAuthority() ))      
+					.findFirst().orElse(null); //loggedUser = null;
+		}
+		return loggedUser != null ?true :false;
 	}
 
 	
